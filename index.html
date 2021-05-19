@@ -12,7 +12,7 @@
           <fieldset>
             <h2>Json File</h2>
              <input type='file' id='fileinput'>
-             <input type='button' id='btnLoad' value='Load' onclick='loadfile(loadData);'>
+             <input type='button' id='btnLoad' value='Load' onclick='loadfile();'>
           </fieldset>
         </form>
 
@@ -51,6 +51,7 @@
             donnee['type'] = 'FeatureCollection';
             donnee['features'] = [];
             var k =0;
+            
             var mbAttr = 'Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, ' +
             'Imagery © <a href="https://www.mapbox.com/">Mapbox</a>';
 
@@ -58,21 +59,49 @@
             var OpenStreetMap   = L.tileLayer('http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {id: 'map1', tileSize: 512, zoomOffset: -1, attribution: mbAttr});
 
 
-
+            var startDate = new Date();
+                startDate.setUTCHours(0, 0, 0, 0);
 
             var map = L.map('map', {
                 zoom: 8,
                 center: [-34, 9],
-                layers : [OpenStreetMap],
+                layers : [OpenStreetMap]/*,
                 timeDimension: true,
                 timeDimensionOptions: {
-                    timeInterval: "2018-05-02/2018-05-02",
-                    period: "PT1H"
+                    timeInterval: "2018-05-02T00:00:11/2018-05-02T00:02:11",
+                    period: "PT2M"
                 },
-                timeDimensionControl: true
+                timeDimensionControl: true*/
              });
+            // start of TimeDimension manual instantiation
+            var timeDimension = new L.TimeDimension({
+                    period: "PT5M",
+                });
+            // helper to share the timeDimension object between all layers
+            map.timeDimension = timeDimension; 
+            // otherwise you have to set the 'timeDimension' option on all layers.
 
-           function loadfile(callback){
+            var player        = new L.TimeDimension.Player({
+                transitionTime: 100, 
+                loop: false,
+                startOver:true
+            }, timeDimension);
+
+            var timeDimensionControlOptions = {
+                player:        player,
+                timeDimension: timeDimension,
+                position:      'bottomleft',
+                autoPlay:      true,
+                minSpeed:      1,
+                speedStep:     0.5,
+                maxSpeed:      15,
+                timeSliderDragUpdate: true
+            };
+
+            var timeDimensionControl = new L.Control.TimeDimension(timeDimensionControlOptions);
+            map.addControl(timeDimensionControl);
+
+          function loadfile(){
             var input, file, fr ;
 
             if (typeof window.FileReader !== 'function') {
@@ -95,13 +124,14 @@
               fr = new FileReader();
               fr.onload = receivedText;
               fr.readAsText(file);
-              callback(data, slider);
+              //callback(data, slider);
+              
               
 
             }
             
             
-        }        
+          }        
 
 
         function receivedText(e) {
@@ -115,6 +145,7 @@
                 data[i]= [newArr.boat.positions[i].lat, newArr.boat.positions[i].lon, newArr.boat.positions[i].time];
                 mmsi = newArr.boat.mmsi;
           }
+          promiseDataTabDefined();
          }
 
         /* data[] est rempli avec les donnéées du json pour pouvoir créer une variable geojson et la lier à la timeline mais la l'ordre d'execution du code pose problème*/
@@ -123,23 +154,24 @@
 
          function loadData(d, callback){
           console.log('data');
-          console.log(data); //data renseigné
+          console.log(d); //data renseigné
           console.log('data.length'); //data.length = 0
-          console.log(data.length);
+          console.log(d.length);
+          
             for (var i = 0; i <d.length; i++) {
               
               var newFeature = {
                 "type": "Feature",
                 "geometry": {
                   "type": "Point",
-                  "time": d[i][2]*1000,
+                  "time": d[i][2],
                   "coordinates": [d[i][1], d[i][0]]       // lon/lat
                 },
                 "properties": {
                   
                   "description": mmsi
                 }
-                }
+              }
             donnee['features'].push(newFeature);
               
             }
@@ -149,10 +181,13 @@
 
 
 
-          async function slider(){
-          
+          function slider(){
+            console.log('donnee');
+            console.log(donnee);
+
+            
            
-           var donneeTimeLayer = L.timeDimension.layer.geoJson(donnee, {
+           var donneeTimeLayer = L.timeDimension.layer.geoJson(L.geoJson(donnee), {
                 updateTimeDimension: true,
                 addlastPoint: true,
                 waitForReady: true
@@ -164,7 +199,21 @@
             var baseLayers = getCommonBaseLayers(map); // see baselayers.js
             L.control.layers(baseLayers, overlayMaps).addTo(map);
             donneeTimeLayer.addTo(map);
-            L.timeDimension.layer.geoJson(donneeTimeLayer).addTo(map);
+            //L.timeDimension.layer.geoJson(donneeTimeLayer).addTo(map);
+          }
+
+
+          function promiseDataTabDefined(){
+            
+            return new Promise((resolve, reject) => {
+              
+              if ((data.length!=null)&&(data.length!=0)) {
+                console.log('tableau défini', data.length)
+                resolve(loadData(data, slider));
+              }else {
+                  reject(data.length);
+              }
+            })
           }
 
 
